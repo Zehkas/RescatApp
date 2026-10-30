@@ -1,18 +1,19 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { supabase } from '../utils/supabase'
 import BotonNav from './botonNav'
 
 type Usuario = {
-    id: string,
-    nombre: string,
-    usuario: string, //Varia entre vendedor y rescatista
+    id_usuario: string,
+    username: string,
+    is_vendedor: boolean,
     exp: number, //Transformar en nivel y progreso
-    bolsasResc: number,
-    totalAhorro: number,
-    bolsasVend?: number //Solo si es vendedor
+    bolsas_rescatadas: number,
+    ahorro: number,
+    bolsas_vendidas: number //Solo si es vendedor
 }
 
 const perfil = () => {
@@ -20,24 +21,37 @@ const perfil = () => {
     const [user, setUser] = useState<Usuario | null>(null)
 
     useEffect(() => {
-        //Funcion pa sacar los datos del supabase
+        const fetchUserData = async () => {
+            try {
+                const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
-        //Datos fake
-        const datosFake: Usuario = {
-            id: '1',
-            nombre: 'Vicente',
-            usuario: 'vendedor',
-            exp: 3630,
-            bolsasResc: 15,
-            totalAhorro: 45000
-        }
-        setUser(datosFake)
-    }, [])
+                if (authUser) {
+                    const { data: userData } = await supabase
+                        .from('usuarios')
+                        .select('*')
+                        .eq('id_usuario', authUser.id)
+                        .single();
+
+                    if (userData) {
+                        setUser(userData);
+                    }
+                }
+            } catch (error) {
+                Alert.alert('Error', 'Error al cargar los datos del usuario');
+            }
+        };
+
+        fetchUserData();
+    }, []);
 
     const handleLogout = () => {
-        //Cierra sesion de cuenta y redirige a login
-        console.log('Cerrando sesión...');
-        router.replace('/login')
+        const { error } = supabase.auth.signOut();
+
+        if (error) {
+            Alert.alert('Error', 'Error al cerrar sesión');
+        } else {
+            router.replace('/login');
+        }
     }
 
     if (!user) {
@@ -57,8 +71,8 @@ const perfil = () => {
                             <Ionicons name="person" size={50} color="#FFFFFF" />
                         </View>
                         <View style={styles.userInfo}>
-                            <Text style={styles.userName}>{user.nombre}</Text>
-                            <Text style={styles.userRole}>{user.usuario === 'vendedor' ? 'Vendedor/a' : 'Rescatista'}</Text>
+                            <Text style={styles.userName}>{user.username}</Text>
+                            <Text style={styles.userRole}>{user.is_vendedor ? 'Vendedor/a' : 'Rescatista'}</Text>
                             <View style={styles.progressContainer}>
                                 <Text style={styles.levelText}>Nivel: {Math.floor(user.exp / 1000)}</Text>
                                 <View style={styles.progressBarBackground}>
@@ -72,19 +86,19 @@ const perfil = () => {
                 <View style={styles.statsGrid}>
                     <View style={styles.statCard}>
                         <Text style={styles.statTitle}>Bolsas Rescatadas</Text>
-                        <Text style={styles.statNumber}>{user.bolsasResc}</Text>
+                        <Text style={styles.statNumber}>{user.bolsas_rescatadas}</Text>
                     </View>
                     <View style={styles.statCard}>
                         <Text style={styles.statTitle}>Total Ahorrado</Text>
-                        <Text style={styles.statNumber}>${user.totalAhorro.toLocaleString()}</Text>
+                        <Text style={styles.statNumber}>${user.ahorro.toLocaleString()}</Text>
                     </View>
                 </View>
 
-                {user.usuario === 'vendedor' && (
+                {user.is_vendedor && (
                     <View style={styles.singleStatRow}>
                         <View style={styles.statCard}>
                             <Text style={styles.statTitle}>Bolsas Vendidas</Text>
-                            <Text style={styles.statNumber}>{user.bolsasVend || 0}</Text>
+                            <Text style={styles.statNumber}>{user.bolsas_vendidas || 0}</Text>
                         </View>
                     </View>
                 )}

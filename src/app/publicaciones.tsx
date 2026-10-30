@@ -1,6 +1,7 @@
+import { supabase } from '@/utils/supabase'
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import BotonNav from './botonNav'
 
@@ -11,13 +12,75 @@ const publicaciones = () => {
 
   const [nombrePub, setNombrePub] = useState('')
   const [categoria, setCategoria] = useState('')
+  const [descripcion, setDescripcion] = useState('');
   const [precioNormal, setPrecioNormal] = useState('')
   const [precioRescate, setPrecioRescate] = useState('')
   const [horaRetiro, setHoraRetiro] = useState('')
+  const [stock, setStock] = useState('1')
 
-  const handleCrearPublicacion = () => {
-    //Funcion para crear en la base de datos
-    console.log('Publicación creada:', { nombrePub, categoria, precioNormal, precioRescate, horaRetiro });
+  const handleCrearPublicacion = async () => {
+
+    if (!nombrePub || !precioNormal || !precioRescate || !horaRetiro || !stock) {
+      Alert.alert('Error', 'Por favor llena los campos obligatorios');
+      return;
+    }
+
+    try {
+      const { data : { user }, error: authError} = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        Alert.alert('Error', 'Debes iniciar sesión para publicar');
+        return;
+      }
+
+      const { data: userData, error: userError} = await supabase
+        .from('usuarios')
+        .select('id_comercio')
+        .eq('id_usuario', user.id)
+        .single();
+
+
+      if (userError || !userData?.id_comercio) {
+        Alert.alert('Falta información', 'Tu cuenta no está vinculada a ningún comercio.');
+        return;
+      }
+
+
+      const { error: insertError } = await supabase
+        .from('bolsas')
+        .insert([
+          {
+            id_comercio: userData.id_comercio,
+            nombre: nombrePub,
+            categoria: categoria || 'General',
+            descripcion: descripcion,
+            precio_normal: parseFloat(precioNormal),
+            precio_rescate: parseFloat(precioRescate),
+            hora_retiro: horaRetiro,
+            stock: parseInt(stock),
+            estado: 'disponible' 
+          }
+        ]);
+
+      if (insertError) throw insertError;
+
+      Alert.alert('Éxito', 'Publicación creada correctamente');
+
+      // Limpiar formulario
+      setNombrePub('');
+      setCategoria('');
+      setDescripcion('');
+      setPrecioNormal('');
+      setPrecioRescate('');
+      setHoraRetiro('');
+      setStock('1');
+      
+      router.replace('/pubActivas');
+
+    } catch (error) {
+      console.error('Error al crear publicación:', error);
+      Alert.alert('Error', 'Hubo un problema al crear la publicación');
+    }
   };
 
   return (
@@ -44,7 +107,18 @@ const publicaciones = () => {
             value={nombrePub}
             onChangeText={setNombrePub} />
 
-          {/*Picker de Categoría*/}
+          <TextInput
+            style={styles.inputFull}
+            placeholder="Categoría (Ej: Panadería)"
+            value={categoria}
+            onChangeText={setCategoria} />
+
+          <TextInput
+            style={[styles.inputFull, { height: 80, textAlignVertical: 'top' }]}
+            placeholder="Descripción detallada"
+            multiline
+            value={descripcion}
+            onChangeText={setDescripcion} />
 
           <View style={styles.rowWrapper}>
             <TextInput
@@ -60,6 +134,17 @@ const publicaciones = () => {
               value={precioRescate}
               onChangeText={setPrecioRescate} />
           </View>
+
+          <View style={styles.row}>
+            <Text style={styles.label}>Cantidad / Stock:</Text>
+            <TextInput
+              style={[styles.inputHalf, { flex: 1, marginLeft: 10 }]}
+              placeholder="Ej: 3"
+              keyboardType="numeric"
+              value={stock}
+              onChangeText={setStock} />
+          </View>
+
           <View style={styles.row}>
             <Text style={styles.label}>Hora de Retiro:</Text>
             <TextInput
@@ -73,12 +158,14 @@ const publicaciones = () => {
             <Text style={styles.submitButtonText}>Publicar</Text>
           </TouchableOpacity>
         </View>
-
       </ScrollView>
+      
       <BotonNav />
     </SafeAreaView>
   )
 }
+
+
 
 const styles = StyleSheet.create({
   container: {

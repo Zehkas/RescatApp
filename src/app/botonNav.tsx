@@ -1,3 +1,4 @@
+import { supabase } from '@/utils/supabase';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { usePathname, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -7,12 +8,37 @@ export default function BottomNav() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [userRole, setUserRole] = useState<'vendedor' | 'rescatista' | null>(null);
+  const [isVendedor, setIsVendedor] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Extraer rol de la base de datos
-    setUserRole('vendedor'); 
-  }, []);
+
+    const fetchUserRole = async () => {
+      try {
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+
+        if (authError || !authUser) return;
+
+        const { data, error} = await supabase
+          .from('usuarios')
+          .select('is_vendedor')
+          .eq('id_usuario', authUser.id)
+          .single();
+
+        if (error) throw error;
+
+       
+
+        setIsVendedor(data.is_vendedor)
+
+      } catch (error) {
+        console.error('Error al obtener el rol para el BottomNav:', error);
+      }
+        
+
+  };
+  
+  fetchUserRole();
+ }, []);
 
   const isPublicarActive = pathname === '/publicaciones' || pathname === '/pubActivas';
   const isPerfilActive = pathname === '/perfil';
@@ -20,7 +46,7 @@ export default function BottomNav() {
   const ACTIVE_COLOR = '#00C853';
   const INACTIVE_COLOR = '#555555';
 
-  if (!userRole) return null;
+  if (isVendedor === null) return null;
 
   return (
     <View style={styles.navContainer}>
@@ -39,8 +65,8 @@ export default function BottomNav() {
         </Text>
       </TouchableOpacity>
 
-      {userRole === 'vendedor' && <View style={styles.divider} />}
-      {userRole === 'vendedor' && (
+      {isVendedor && <View style={styles.divider} />}
+      {isVendedor && (
         <TouchableOpacity 
           style={styles.navButton} 
           onPress={() => router.replace('/publicaciones')}
@@ -65,7 +91,7 @@ export default function BottomNav() {
       >
         <Ionicons 
           name="person-outline" 
-          size={userRole === 'rescatista' && isPerfilActive ? 32 : 28} // Ligeramente más grande si es rescatista y está activo
+          size={!isVendedor && isPerfilActive ? 32 : 28} // Ligeramente más grande si es rescatista y está activo
           color={isPerfilActive ? ACTIVE_COLOR : INACTIVE_COLOR} 
         />
         <Text style={[styles.navText, isPerfilActive && styles.activeText]}>

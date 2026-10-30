@@ -1,10 +1,18 @@
 import { Ionicons } from '@expo/vector-icons'
+import { Picker } from '@react-native-picker/picker'
 import Checkbox from 'expo-checkbox'
 import { useRouter } from 'expo-router'
-import React, { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { supabase } from '../utils/supabase'
+
+
+type Comercio = {
+  id_comercio: string;
+  nombre_local: string;
+}
+
 
 const login = () => {
 
@@ -16,48 +24,77 @@ const login = () => {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isVendedor, setIsVendedor] = useState(false)
+  const [codigoComercio, setCodigoComercio] = useState('')
+  const [comercios, setComercios] = useState<Comercio[]>([]);
+  const [selectedComercio, setSelectedComercio] = useState<string | null>(null);
+
+
+
+  useEffect(() => {
+    const fetchComercios = async () => {
+      const { data, error } = await supabase
+        .from('comercio')
+        .select('id_comercio, nombre_local');
+
+      if (!error && data) {
+        setComercios(data);
+        // Si hay comercios, pre-selecciona el primero por defecto
+        if (data.length > 0) {
+          setSelectedComercio(data[0].id_comercio);
+        }
+      }
+    };
+    
+    fetchComercios();
+  }, []);
+
 
   const handleLogin = async () => {
     if (login) {
       // Lógica de inicio de sesión
-      console.log('Iniciando sesión con:', { email, password });
-      router.replace('/mapscreen')
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+
+      if (error) {
+        Alert.alert('Error', 'Correo o contraseña incorrectos');
+        return;
+      } else {
+        console.log('Iniciando sesión con:', { email, password });
+        router.replace('/mapscreen')
+      }
+
     } else {
       // Lógica de registro
       if (password !== confirmPassword) {
         Alert.alert('Error', 'Las contraseñas no coinciden');
         return;
       }
-      try {
-        const { data: existingUser, error: searchError } = await supabase
-          .from('usuario')
-          .select('email')
-          .eq('email', email)
 
-        if (searchError) throw searchError;
-        if (existingUser && existingUser.length > 0) {
-          Alert.alert('Error', 'El correo ya está registrado');
-          return;
+
+      const { error } = await supabase.auth.signUp({
+        email: email,
+        password: password,
+        options: {
+          data: {
+            username: username,
+            is_vendedor: isVendedor,
+            id_comercio: isVendedor ? selectedComercio : null,
+            exp: 0,
+            bolsas_rescatadas: 0,
+            ahorro: 0,
+            bolsas_vendidas: isVendedor ? 0 : 0
+          }
         }
 
-        const { error: insertError } = await supabase
-          .from('usuario')
-          .insert([
-            {
-              username: username,
-              email: email,
-              password: password, //hashear?
-              isVendedor: isVendedor,
-              exp: 0,
-              bolsasRescatadas: 0,
-              ahorro: 0,
-              bolsasVendidas: isVendedor ? 0 : null
-            }
-          ]);
-        if (insertError) throw insertError;
+      });
+      if (error) {
+        Alert.alert('Error', error.message);
+      } else {
         Alert.alert('Éxito', 'Usuario registrado correctamente');
         setLogin(true);
-      } catch (error) { Alert.alert('Error', 'Hubo un problema al registrar el usuario'); }
+      }
     }
   }
 
@@ -130,6 +167,40 @@ const login = () => {
               </>
 
             )}
+
+
+            {!login && isVendedor && (
+              <View style={{ width: '100%', marginBottom: 15 }}>
+                <View style={styles.checkboxContainer}>
+                   <Ionicons name="storefront" size={24} color="#757575" style={styles.icon} />
+                   <Text style={{ color: '#555', flex: 1 }}>Selecciona tu Local:</Text>
+                </View>
+                
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={selectedComercio}
+                    onValueChange={(itemValue) => setSelectedComercio(itemValue)}
+                    style={styles.picker}
+                  >
+                    {comercios.length === 0 ? (
+                      <Picker.Item label="Cargando locales..." value={null} />
+                    ) : (
+                      comercios.map((comercio) => (
+                        <Picker.Item
+                          key={comercio.id_comercio}
+                          label={comercio.nombre_local}
+                          value={comercio.id_comercio}
+                        />
+                      ))
+                    )}
+                  </Picker>
+                </View>
+              </View>
+            )}
+
+
+
+
 
             <TouchableOpacity style={styles.mainButton} onPress={handleLogin}>
               <Text style={styles.mainButtonText}>{login ? 'Iniciar Sesión' : 'Registrarse'}</Text>
@@ -248,6 +319,17 @@ const styles = StyleSheet.create({
   checkboxLabel: {
     fontSize: 14,
     color: '#333',
+  },
+  pickerContainer: {
+    backgroundColor: '#E0E0E0',
+    borderRadius: 25,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    marginLeft: 40,
+  },
+  picker: {
+    width: '100%',
+    color: '#000',
   },
 });
 

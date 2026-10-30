@@ -1,14 +1,18 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { supabase } from '../utils/supabase';
 import BotonNav from './botonNav';
 
-type arrayPub = { //modificar segun datos en BDD
+type arrayPub = {
   id: string,
   nombre: string,
-  precioNormal: number,
-  precioRescate: number,
+  descripcion: string,
+  categoria: string,
+  precio_normal: number,
+  precio_rescate: number,
+  stock: number,
   estado: string
 };
 
@@ -17,22 +21,61 @@ const pubActivas = () => {
   const router = useRouter()
   const [publicaciones, setPublicaciones] = useState<arrayPub[]>([])
 
-  useEffect(() => {//Extraer las publicaciones activas de la base de datos
-    // Simulación de datos obtenidos de la base de datos
-    const publicacionesActivas = [
-      { id: '1', nombre: 'Muffins Frambuesa', precioNormal: 2500, precioRescate: 1500, estado: 'esperando reserva' },
-      { id: '2', nombre: 'Kilo Pan', precioNormal: 1390, precioRescate: 1000, estado: 'expirada' },
-      { id: '3', nombre: 'Tartaleta', precioNormal: 8990, precioRescate: 6990, estado: 'expirada' }
-    ];
-    setPublicaciones(publicacionesActivas);
+  useEffect(() => {
+    const fetchPublicaciones = async () => {
+      try {
+        const { data : { user }, error : authError } = await supabase.auth.getUser();
+        if (authError || !user) return;
+
+        const { data: userData, error: userError } = await supabase
+          .from('usuarios')
+          .select('id_comercio')
+          .eq('id_usuario', user.id)
+          .single();
+
+
+          if (userError || !userData?.id_comercio) return;
+
+
+          const { data: bolsasData, error: bolsasError } = await supabase
+          .from('bolsas')
+          .select('id_bolsa, nombre, descripcion, categoria, precio_normal, precio_rescate, stock, estado, hora_retiro')
+          .eq('id_comercio', userData.id_comercio)
+          .order('hora_retiro', { ascending: true });
+
+
+          if (bolsasError) throw bolsasError;
+
+
+          if (bolsasData) {
+          const publicacionesActivas: arrayPub[] = bolsasData.map((bolsa) => ({
+            id: bolsa.id_bolsa,
+            nombre: bolsa.nombre,
+            descripcion: bolsa.descripcion,
+            categoria: bolsa.categoria,
+            precio_normal: bolsa.precio_normal,
+            precio_rescate: bolsa.precio_rescate,
+            stock: bolsa.stock,
+            estado: bolsa.estado 
+          }));
+          setPublicaciones(publicacionesActivas);
+        }
+
+        } catch (error) {
+        console.error('Error al cargar publicaciones:', error);
+        Alert.alert('Error', 'No se pudieron cargar tus publicaciones activas');
+      }
+    };
+
+    fetchPublicaciones();
   }, [])
 
   const handleScanQR = (id: string) => {
-    // Lógica para escanear el código QR y actualizar el estado de la publicación
+    // Lógica para escanear el código QR y actualizar el estado de la publicación (Se implementara en la siguiente entrega)
     console.log('Escaneando código QR...');
   }
 
-  return (
+return (
     <SafeAreaView style={styles.container}>
       <View style={styles.tabContainer}>
         <TouchableOpacity style={styles.tabButton} onPress={() => router.replace('/publicaciones')}>
@@ -47,42 +90,68 @@ const pubActivas = () => {
       <ScrollView style={styles.content}>
         <View style={styles.mainCard}>
           <Text style={styles.mainTitle}>Publicaciones Activas</Text>
-          {publicaciones.map((pub) => (
-            <View key={pub.id} style={styles.itemCard}>
-              <View style={styles.itemHeader}>
-                <View style={styles.nameContainer}>
-                  <Text style={styles.itemName}>{pub.nombre}</Text>
-                  <Text style={[
-                    styles.itemStatus,
-                    pub.estado === 'reservada' && styles.statusReservada,
-                    pub.estado === 'expirada' && styles.statusExpirada
-                  ]}>{pub.estado === 'esperando reserva' ? '' : pub.estado.charAt(0).toUpperCase() + pub.estado.slice(1)}</Text>
-                </View>
-                <View style={styles.priceContainer}>
-                  <Text style={styles.normalPrice}>${pub.precioNormal}</Text>
-                  <Text style={styles.specialPrice}>${pub.precioRescate}</Text>
-                </View>
-              </View>
-              {pub.estado === 'reservada' && (
-                <TouchableOpacity style={styles.scannerContainer} onPress={() => handleScanQR(pub.id)}>
-                  <View style={styles.scannerBox}>
-                    <View style={[styles.corner, styles.topLeft]} />
-                    <View style={[styles.corner, styles.topRight]} />
-                    <View style={[styles.corner, styles.bottomLeft]} />
-                    <View style={[styles.corner, styles.bottomRight]} />
+          
+          {publicaciones.length === 0 ? (
+            <Text style={{ textAlign: 'center', color: '#666', marginTop: 20 }}>
+              No tienes publicaciones activas en este momento.
+            </Text>
+          ) : (
+            publicaciones.map((pub) => (
+              <View key={pub.id} style={styles.itemCard}>
+                
+  
+                <View style={styles.itemHeader}>
+                  <View style={styles.nameContainer}>
+                    <Text style={styles.itemName}>{pub.nombre}</Text>
+
+                    <Text style={[
+                      styles.itemStatus,
+                      pub.estado === 'reservada' && styles.statusReservada,
+                      pub.estado === 'expirada' && styles.statusExpirada,
+                      pub.estado === 'disponible' && { color: '#00C853' } 
+                    ]}>
+                      {pub.estado ? pub.estado.charAt(0).toUpperCase() + pub.estado.slice(1) : ''}
+                    </Text>
                   </View>
-                  <Text style={styles.scannerText}>Escanea el QR de la reserva</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
+                  
+                  <View style={styles.priceContainer}>
+                    <Text style={styles.normalPrice}>${pub.precio_normal}</Text>
+                    <Text style={styles.specialPrice}>${pub.precio_rescate}</Text>
+                  </View>
+                </View>
+
+                <View style={{ marginTop: 6 }}>
+                  <Text style={{ fontSize: 13, color: '#777' }}>
+                    Categoría: {pub.categoria}
+                  </Text>
+
+                  {pub.estado === 'disponible' && (
+                    <Text style={{ fontSize: 13, color: '#555', marginTop: 2 }}>
+                      Stock disponible: {pub.stock}
+                    </Text>
+                  )}
+                </View>
+
+                {pub.estado === 'reservada' && (
+                  <TouchableOpacity style={styles.scannerContainer} onPress={() => handleScanQR(pub.id)}>
+                    <View style={styles.scannerBox}>
+                      <View style={[styles.corner, styles.topLeft]} />
+                      <View style={[styles.corner, styles.topRight]} />
+                      <View style={[styles.corner, styles.bottomLeft]} />
+                      <View style={[styles.corner, styles.bottomRight]} />
+                    </View>
+                    <Text style={styles.scannerText}>Escanea el QR de la reserva</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
       <BotonNav />
     </SafeAreaView>
   )
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
