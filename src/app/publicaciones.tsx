@@ -1,22 +1,31 @@
 import { supabase } from '@/utils/supabase'
+import DateTimePicker from '@react-native-community/datetimepicker'
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import BotonNav from './botonNav'
 
 const publicaciones = () => {
 
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState('crear')
+  const [mostrarReloj, setMostrarReloj] = useState(false);
 
   const [nombrePub, setNombrePub] = useState('')
   const [categoria, setCategoria] = useState('')
   const [descripcion, setDescripcion] = useState('');
   const [precioNormal, setPrecioNormal] = useState('')
   const [precioRescate, setPrecioRescate] = useState('')
-  const [horaRetiro, setHoraRetiro] = useState('')
+  const [horaRetiro, setHoraRetiro] = useState<Date | null>(null)
   const [stock, setStock] = useState('1')
+
+  const onValueChangeHora = (_event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') setMostrarReloj(false);
+    if (selectedDate) {
+      selectedDate.setSeconds(0, 0);
+      setHoraRetiro(selectedDate);
+    }
+  };
 
   const handleCrearPublicacion = async () => {
 
@@ -25,15 +34,20 @@ const publicaciones = () => {
       return;
     }
 
+    if (horaRetiro <= new Date()) {
+      Alert.alert('Hora inválida', 'La hora límite de retiro debe ser mayor a la hora actual.');
+      return;
+    }
+
     try {
-      const { data : { user }, error: authError} = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
 
       if (authError || !user) {
         Alert.alert('Error', 'Debes iniciar sesión para publicar');
         return;
       }
 
-      const { data: userData, error: userError} = await supabase
+      const { data: userData, error: userError } = await supabase
         .from('usuarios')
         .select('id_comercio')
         .eq('id_usuario', user.id)
@@ -56,9 +70,9 @@ const publicaciones = () => {
             descripcion: descripcion,
             precio_normal: parseFloat(precioNormal),
             precio_rescate: parseFloat(precioRescate),
-            hora_retiro: horaRetiro,
+            hora_retiro: horaRetiro.toISOString(),
             stock: parseInt(stock),
-            estado: 'disponible' 
+            estado: 'disponible'
           }
         ]);
 
@@ -66,15 +80,6 @@ const publicaciones = () => {
 
       Alert.alert('Éxito', 'Publicación creada correctamente');
 
-      // Limpiar formulario
-      setNombrePub('');
-      setCategoria('');
-      setDescripcion('');
-      setPrecioNormal('');
-      setPrecioRescate('');
-      setHoraRetiro('');
-      setStock('1');
-      
       router.replace('/pubActivas');
 
     } catch (error) {
@@ -147,25 +152,39 @@ const publicaciones = () => {
 
           <View style={styles.row}>
             <Text style={styles.label}>Hora de Retiro:</Text>
-            <TextInput
+            <TouchableOpacity
               style={[styles.inputHalf, { flex: 1, marginLeft: 10 }]}
-              placeholder="HH:MM"
-              value={horaRetiro}
-              onChangeText={setHoraRetiro} />
+              onPress={() => setMostrarReloj(true)}
+            >
+              <Text style={{ textAlign: 'center', color: horaRetiro ? '#000' : '#888' }}>
+                {horaRetiro
+                  ? horaRetiro.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                  : 'HH:MM AM/PM'}
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          {mostrarReloj && (
+            <DateTimePicker
+              value={horaRetiro || new Date()}
+              mode="time"
+              is24Hour={false}
+              display="spinner"
+              onValueChange={onValueChangeHora}
+              onDismiss={() => setMostrarReloj(false)}
+            />
+          )}
 
           <TouchableOpacity style={styles.submitButton} onPress={handleCrearPublicacion}>
             <Text style={styles.submitButtonText}>Publicar</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
-      
+
       <BotonNav />
     </SafeAreaView>
   )
 }
-
-
 
 const styles = StyleSheet.create({
   container: {
