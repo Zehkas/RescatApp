@@ -47,6 +47,19 @@ const calcularDistancia = (lat1: number, lon1: number, lat2: number, lon2: numbe
         : `${(metros / 1000).toFixed(1)} km`;
 };
 
+const OPCIONES_RADIO = [
+    { label: 'Todos', valor: null },
+    { label: '1 km', valor: 1000 },
+    { label: '3 km', valor: 3000 },
+    { label: '5 km', valor: 5000 },
+];
+
+const textoAMetros = (texto: string): number => {
+    const valor = parseFloat(texto);
+    if (isNaN(valor)) return Infinity;
+    return texto.includes('km') ? valor * 1000 : valor;
+};
+
 const MapScreen = () => {
     const router = useRouter();
     const mapRef = useRef<MapView | null>(null);
@@ -61,8 +74,16 @@ const MapScreen = () => {
 
     const [tiempoRestante, setTiempoRestante] = useState('15:00');
 
+    const [radioFiltro, setRadioFiltro] = useState<number | null>(null);
+
+    const rescatesFiltrados = rescates
+        .filter((item) => {
+            if (radioFiltro === null) return true;
+            return textoAMetros(item.distancia) <= radioFiltro;
+        })
+        .sort((a, b) => textoAMetros(a.distancia) - textoAMetros(b.distancia));
+
     useEffect(() => {
-        console.log('Modal:', qrModalVisible, 'fechaReserva:', reservaActiva?.fechaReserva);
         if (!qrModalVisible || !reservaActiva?.fechaReserva) return;
 
         const actualizarTiempo = () => {
@@ -350,6 +371,28 @@ const MapScreen = () => {
                 </TouchableOpacity>
             )}
 
+
+            {/* Barra de filtros por cercanía */}
+            <View style={styles.filterContainer}>
+                {OPCIONES_RADIO.map((opcion) => {
+                    const activo = radioFiltro === opcion.valor;
+                    return (
+                        <TouchableOpacity
+                            key={opcion.label}
+                            style={[styles.filterPill, activo && styles.filterPillActive]}
+                            onPress={() => {
+                                setRadioFiltro(opcion.valor);
+                                setSelectedId(null);
+                            }}
+                        >
+                            <Text style={[styles.filterText, activo && styles.filterTextActive]}>
+                                {opcion.label}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+
             <MapView
                 ref={mapRef}
                 style={styles.map}
@@ -357,7 +400,7 @@ const MapScreen = () => {
                 showsUserLocation={true}
                 showsMyLocationButton={true}
             >
-                {rescates.map((item) =>
+                {rescatesFiltrados.map((item) =>
                     item.coordenadas ? (
                         <Marker
                             key={item.id}
@@ -377,7 +420,7 @@ const MapScreen = () => {
                         <ActivityIndicator size="small" color="#00bf19" />
                         <Text style={{ marginLeft: 10, color: 'gray' }}>Buscando rescates...</Text>
                     </View>
-                ) : rescates.length === 0 ? (
+                ) : rescatesFiltrados.length === 0 ? (
                     <View style={styles.emptyCard}>
                         <Text style={{ color: 'gray' }}>No hay bolsas disponibles en este momento.</Text>
                     </View>
@@ -385,7 +428,7 @@ const MapScreen = () => {
                     <FlatList
                         horizontal
                         showsHorizontalScrollIndicator={false}
-                        data={rescates}
+                        data={rescatesFiltrados}
                         keyExtractor={(item) => item.id}
                         contentContainerStyle={{ paddingHorizontal: 10, alignItems: 'flex-end' }}
                         renderItem={({ item }) => {
@@ -720,6 +763,37 @@ const styles = StyleSheet.create({
     qrDistance: {
         fontSize: 13,
         color: '#555',
+    },
+    filterContainer: {
+        position: 'absolute',
+        top: 112,
+        left: 20,
+        right: 20,
+        zIndex: 10,
+        flexDirection: 'row',
+        gap: 8,
+    },
+    filterPill: {
+        backgroundColor: 'white',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 20,
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+    },
+    filterPillActive: {
+        backgroundColor: '#00bf19',
+    },
+    filterText: {
+        fontSize: 13,
+        fontWeight: 'bold',
+        color: '#555',
+    },
+    filterTextActive: {
+        color: '#FFFFFF',
     },
 });
 
