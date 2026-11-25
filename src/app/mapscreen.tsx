@@ -27,6 +27,7 @@ type RescateDisponible = {
 type ReservaActiva = {
     item: RescateDisponible;
     codigoRetiro: string;
+    fechaReserva: string;
 };
 
 const calcularDistancia = (lat1: number, lon1: number, lat2: number, lon2: number): string => {
@@ -57,6 +58,32 @@ const MapScreen = () => {
     const [reservando, setReservando] = useState(false);
     const [reservaActiva, setReservaActiva] = useState<ReservaActiva | null>(null);
     const [qrModalVisible, setQrModalVisible] = useState(false);
+
+    const [tiempoRestante, setTiempoRestante] = useState('15:00');
+
+    useEffect(() => {
+        console.log('Modal:', qrModalVisible, 'fechaReserva:', reservaActiva?.fechaReserva);
+        if (!qrModalVisible || !reservaActiva?.fechaReserva) return;
+
+        const actualizarTiempo = () => {
+            const limite = new Date(reservaActiva.fechaReserva).getTime() + 15 * 60 * 1000;
+            const diferencia = limite - Date.now();
+
+            if (diferencia <= 0) {
+                setTiempoRestante('Reserva expirada');
+                return;
+            }
+
+            const minutos = Math.floor(diferencia / 60000);
+            const segundos = Math.floor((diferencia % 60000) / 1000);
+            setTiempoRestante(`${minutos}:${segundos.toString().padStart(2, '0')} min`);
+        };
+
+        actualizarTiempo();
+        const intervalo = setInterval(actualizarTiempo, 1000);
+
+        return () => clearInterval(intervalo);
+    }, [qrModalVisible, reservaActiva]);
 
     const fetchBolsasDisponibles = async (userLat?: number, userLon?: number) => {
         try {
@@ -127,6 +154,7 @@ const MapScreen = () => {
                     id_reserva,
                     codigo_retiro,
                     estado,
+                    fecha_reserva,
                     bolsas (
                         id_bolsa,
                         nombre,
@@ -154,6 +182,8 @@ const MapScreen = () => {
                 const comercio: any = Array.isArray(bolsa.comercio) ? bolsa.comercio[0] : bolsa.comercio;
                 const lat = comercio?.latitud != null ? Number(comercio.latitud) : null;
                 const lon = comercio?.longitud != null ? Number(comercio.longitud) : null;
+                const limite = new Date(data.fecha_reserva).getTime() + 15 * 60 * 1000;
+                if (Date.now() >= limite) return;
 
                 let distanciaTexto = '-- m';
                 if (userLat !== undefined && userLon !== undefined && lat !== null && lon !== null) {
@@ -162,6 +192,7 @@ const MapScreen = () => {
 
                 setReservaActiva({
                     codigoRetiro: data.codigo_retiro,
+                    fechaReserva: data.fecha_reserva,
                     item: {
                         id: String(bolsa.id_bolsa),
                         rawId: bolsa.id_bolsa,
@@ -256,6 +287,8 @@ const MapScreen = () => {
 
             const codigoRetiro = generarClaveProducto(item);
 
+            const fechaReserva = new Date().toISOString();
+
             // 1. Insertar registro en la tabla "reserva"
             const { error: reservaError } = await supabase
                 .from('reserva')
@@ -265,7 +298,7 @@ const MapScreen = () => {
                         id_usuario: user.id,
                         codigo_retiro: codigoRetiro,
                         estado: 'activa',
-                        fecha_reserva: new Date().toISOString(),
+                        fecha_reserva: fechaReserva,
                     },
                 ]);
 
@@ -280,7 +313,7 @@ const MapScreen = () => {
             if (bolsaError) throw bolsaError;
 
             // 3. Mostrar tarjeta con QR y quitar la bolsa reservada del carrusel disponible
-            setReservaActiva({ item, codigoRetiro });
+            setReservaActiva({ item, codigoRetiro, fechaReserva });
             setQrModalVisible(true);
             setSelectedId(null);
             setRescates((prev) => prev.filter((b) => b.id !== item.id));
@@ -451,7 +484,7 @@ const MapScreen = () => {
                                 <View>
                                     <Text style={styles.reservedLabel}>Reservado</Text>
                                     <Text style={styles.pickupTimeText}>
-                                        Tiempo restante para recoger:{'\n'}15 minutos
+                                        Tiempo restante para recoger:{'\n'}{tiempoRestante}
                                     </Text>
                                 </View>
                                 <Text style={styles.qrDistance}>{reservaActiva.item.distancia}</Text>

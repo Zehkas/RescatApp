@@ -39,6 +39,11 @@ const publicaciones = () => {
       return;
     }
 
+    if (parseFloat(precioRescate) >= parseFloat(precioNormal)) {
+      Alert.alert('Error de precios', 'El precio de rescate debe ser menor al precio normal.');
+      return;
+    }
+
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
 
