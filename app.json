@@ -22,7 +22,8 @@
         "googleMaps": {
           "apiKey": ""
         }
-      }
+      },
+      "package": "com.anonymous.Rescatapp"
     },
     "web": {
       "output": "static",

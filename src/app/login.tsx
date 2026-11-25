@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Picker } from '@react-native-picker/picker'
-import Checkbox from 'expo-checkbox'
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
@@ -155,15 +154,7 @@ const login = () => {
                     onChangeText={setConfirmPassword} />
                 </View>
 
-                <View style={styles.checkboxContainer}>
-                  <Checkbox
-                    style={styles.checkbox}
-                    value={isVendedor}
-                    onValueChange={setIsVendedor}
-                    color={isVendedor ? '#00C853' : undefined}
-                  />
-                  <Text style={styles.checkboxLabel}>¿Eres un Vendedor?</Text>
-                </View>
+                
               </>
 
             )}
@@ -212,7 +203,16 @@ const login = () => {
                 <Text style={styles.toggleLink}>{login ? ' Regístrate' : ' Inicia Sesión'}</Text>
               </TouchableOpacity>
             </View>
+
+            <View style={[styles.toggleContainer, { marginTop: 10 }]}>
+              <Text style={styles.toggleText}>¿Tienes un negocio?</Text>
+              <TouchableOpacity onPress={() => router.push('/registroComercio')}>
+                <Text style={styles.toggleLink}> Registra tu local</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+
+          
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
