@@ -96,7 +96,7 @@ const crearHtml = (centro: Coordenada, zoom: number) => `<!DOCTYPE html>
           radius: 10,
           color: '#ffffff',
           weight: 2,
-          fillColor: m.color || '#E53935',
+          fillColor: m.color || 'red',
           fillOpacity: 1
         });
         if (m.titulo || m.descripcion) {

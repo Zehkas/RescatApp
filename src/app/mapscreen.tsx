@@ -100,7 +100,7 @@ const MapScreen = () => {
                     longitude: item.coordenadas!.longitude,
                     titulo: item.nombreLocal,
                     descripcion: `${item.producto} - $${item.precioRescate}`,
-                    color: selectedId === item.id ? '#00bf19' : '#E53935',
+                    color: selectedId === item.id ? '#00bf19' : 'red',
                 })),
         [rescates, radioFiltro, selectedId]
     );
