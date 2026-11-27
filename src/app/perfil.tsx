@@ -1,8 +1,15 @@
+import {
+    detenerNotificacionesBolsas,
+    iniciarNotificacionesBolsas,
+    registrarPermisosNotificaciones,
+} from '@/utils/notifications'
 import { supabase } from '@/utils/supabase'
 import { Ionicons } from '@expo/vector-icons'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as Notifications from 'expo-notifications'
 import { useRouter } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import BotonNav from './botonNav'
 
@@ -19,11 +26,12 @@ type Usuario = {
 const perfil = () => {
     const router = useRouter()
     const [user, setUser] = useState<Usuario | null>(null)
+    const [notificacionesActivas, setNotificacionesActivas] = useState(false)
 
     useEffect(() => {
         const fetchUserData = async () => {
             try {
-                const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+                const { data: { user: authUser } } = await supabase.auth.getUser();
 
                 if (authUser) {
                     const { data: userData } = await supabase
@@ -41,11 +49,42 @@ const perfil = () => {
             }
         };
 
+        const cargarEstadoNotificaciones = async () => {
+            const guardado = await AsyncStorage.getItem('notificaciones_activas');
+            const { status } = await Notifications.getPermissionsAsync();
+            setNotificacionesActivas(guardado === 'true' && status === 'granted');
+        };
+
         fetchUserData();
+        cargarEstadoNotificaciones();
     }, []);
 
-    const handleLogout = () => {
-        const { error } = supabase.auth.signOut();
+    const handleToggleNotificaciones = async (nuevoValor: boolean) => {
+        if (nuevoValor) {
+            const permisoConcedido = await registrarPermisosNotificaciones();
+            if (!permisoConcedido) {
+                Alert.alert(
+                    'Permiso denegado',
+                    'Para recibir alertas de nuevas bolsas, habilita las notificaciones en los ajustes de tu teléfono.'
+                );
+                setNotificacionesActivas(false);
+                await AsyncStorage.setItem('notificaciones_activas', 'false');
+                return;
+            }
+
+            setNotificacionesActivas(true);
+            await AsyncStorage.setItem('notificaciones_activas', 'true');
+            iniciarNotificacionesBolsas();
+        } else {
+            setNotificacionesActivas(false);
+            await AsyncStorage.setItem('notificaciones_activas', 'false');
+            detenerNotificacionesBolsas();
+        }
+    };
+
+    const handleLogout = async () => {
+        detenerNotificacionesBolsas();
+        const { error } = await supabase.auth.signOut();
 
         if (error) {
             Alert.alert('Error', 'Error al cerrar sesión');
@@ -103,6 +142,20 @@ const perfil = () => {
                     </View>
                 )}
 
+                {/* Interruptor opcional de notificaciones */}
+                <View style={styles.optionCard}>
+                    <View style={styles.optionLeft}>
+                        <Ionicons name="notifications-outline" size={24} color="#00C853" style={{ marginRight: 10 }} />
+                        <Text style={styles.optionText}>Notificaciones</Text>
+                    </View>
+                    <Switch
+                        value={notificacionesActivas}
+                        onValueChange={handleToggleNotificaciones}
+                        trackColor={{ false: '#D1D1D6', true: '#81E6A9' }}
+                        thumbColor={notificacionesActivas ? '#00C853' : '#F4F3F4'}
+                    />
+                </View>
+
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                     <Text style={styles.logoutText}>Cerrar Sesión</Text>
                     <Ionicons name="log-out-outline" size={24} color="#E53935" />
@@ -111,7 +164,6 @@ const perfil = () => {
             <BotonNav />
         </SafeAreaView>
     )
-
 }
 
 const styles = StyleSheet.create({
@@ -121,7 +173,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         padding: 20,
-        paddingBottom: 120, // Espacio extra para que el BottomNav no tape el contenido
+        paddingBottom: 120,
     },
     headerCard: {
         backgroundColor: '#FFFFFF',
@@ -142,7 +194,7 @@ const styles = StyleSheet.create({
         width: 100,
         height: 100,
         borderRadius: 50,
-        backgroundColor: '#000', // Avatar negro del diseño
+        backgroundColor: '#000',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 20,
@@ -174,12 +226,12 @@ const styles = StyleSheet.create({
         backgroundColor: '#E0E0E0',
         borderRadius: 10,
         borderWidth: 2,
-        borderColor: '#000', // Borde negro estilo pixel art
+        borderColor: '#000',
         overflow: 'hidden',
     },
     progressBarFill: {
         height: '100%',
-        backgroundColor: '#00C853', // Verde del diseño
+        backgroundColor: '#00C853',
     },
     statsGrid: {
         flexDirection: 'row',
@@ -187,14 +239,14 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     singleStatRow: {
-        alignItems: 'flex-start', // Alinea a la izquierda para replicar el diseño original
+        alignItems: 'flex-start',
         marginBottom: 20,
     },
     statCard: {
         backgroundColor: '#FFFFFF',
         borderRadius: 15,
         padding: 20,
-        width: '48%', // Para que quepan dos en la misma fila
+        width: '48%',
         alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -212,7 +264,31 @@ const styles = StyleSheet.create({
     statNumber: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: '#00C853', // Verde destacado
+        color: '#00C853',
+    },
+    optionCard: {
+        flexDirection: 'row',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 15,
+        paddingHorizontal: 15,
+        paddingVertical: 10,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
+        marginTop: 10,
+    },
+    optionLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    optionText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#000',
     },
     logoutButton: {
         flexDirection: 'row',
@@ -226,12 +302,12 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 8,
         elevation: 4,
-        marginTop: 10,
+        marginTop: 12,
     },
     logoutText: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#E53935', // Rojo
+        color: '#E53935',
     }
 });
 

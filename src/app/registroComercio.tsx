@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import MapView, { MapPressEvent, Marker, Region } from 'react-native-maps';
+import MapaOSM, { Coordenada } from '../components/MapaOSM';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../utils/supabase';
 
@@ -14,12 +14,11 @@ type Coordenadas = {
 
 const RegistroComercio = () => {
   const router = useRouter();
-  const [region, setRegion] = useState<Region>({
+  const [region, setRegion] = useState<Coordenada>({
     latitude: -35.4264,
     longitude: -71.6554,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
   });
+  const [ubicacionUsuario, setUbicacionUsuario] = useState<Coordenada | null>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -36,28 +35,39 @@ const RegistroComercio = () => {
 
   useEffect(() => {
     const obtenerUbicacionActual = async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permiso denegado', 'No pudimos acceder a tu ubicación. Puedes buscar tu local manualmente en el mapa.');
-        return;
-      }
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permiso denegado', 'No pudimos acceder a tu ubicación. Puedes buscar tu local manualmente en el mapa.');
+          return;
+        }
 
-      const location = await Location.getCurrentPositionAsync({});
-      setRegion({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      });
+        const location = await Location.getCurrentPositionAsync({});
+        const coords = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        };
+        setRegion(coords);
+        setUbicacionUsuario(coords);
+      } catch (error) {
+        console.warn('No se pudo obtener la ubicación:', error);
+      }
     };
 
     obtenerUbicacionActual();
   }, []);
 
-  const handleMapPress = (event: MapPressEvent) => {
-    const { latitude, longitude } = event.nativeEvent.coordinate;
-    setUbicacion({ latitude, longitude });
+  const handleMapPress = (coordenada: Coordenada) => {
+    setUbicacion(coordenada);
   };
+
+  const marcadoresLocal = useMemo(
+    () =>
+      ubicacion
+        ? [{ id: 'local', ...ubicacion, titulo: nombreLocal || 'Tu local', color: '#00C853' }]
+        : [],
+    [ubicacion, nombreLocal]
+  );
 
   const handleRegistrarComercio = async () => {
     if (!email || !password || !confirmPassword || !nombreLocal || !ubicacion) {
@@ -206,21 +216,14 @@ const RegistroComercio = () => {
 
             <Text style={styles.mapLabel}>En el mapa ubica tu local</Text>
             <View style={styles.mapContainer}>
-              <MapView
+              <MapaOSM
                 style={styles.map}
-                region={region}
-                showsUserLocation={true}
-                onRegionChangeComplete={(nuevaRegion) => setRegion(nuevaRegion)}
+                centro={region}
+                zoom={16}
+                ubicacionUsuario={ubicacionUsuario}
+                marcadores={marcadoresLocal}
                 onPress={handleMapPress}
-              >
-                {ubicacion && (
-                  <Marker
-                    coordinate={ubicacion}
-                    title={nombreLocal || 'Tu local'}
-                    pinColor="#00C853"
-                  />
-                )}
-              </MapView>
+              />
 
               <TouchableOpacity
                 style={styles.expandButton}
@@ -266,21 +269,14 @@ const RegistroComercio = () => {
             <Text style={styles.modalHeaderText}>Toca el mapa para marcar tu local</Text>
           </View>
 
-          <MapView
+          <MapaOSM
             style={styles.fullMap}
-            initialRegion={region}
-            showsUserLocation={true}
-            onRegionChangeComplete={(nuevaRegion) => setRegion(nuevaRegion)}
+            centro={region}
+            zoom={16}
+            ubicacionUsuario={ubicacionUsuario}
+            marcadores={marcadoresLocal}
             onPress={handleMapPress}
-          >
-            {ubicacion && (
-              <Marker
-                coordinate={ubicacion}
-                title={nombreLocal || 'Tu local'}
-                pinColor="#00C853"
-              />
-            )}
-          </MapView>
+          />
 
           <View style={styles.modalFooter}>
             <TouchableOpacity
@@ -479,4 +475,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default RegistroComercio;
+export default RegistroComercio;

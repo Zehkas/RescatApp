@@ -1,12 +1,26 @@
-import { Slot } from 'expo-router'
-import { View } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Stack } from 'expo-router';
+import { useEffect } from 'react';
+import {
+  detenerNotificacionesBolsas,
+  iniciarNotificacionesBolsas,
+} from '../utils/notifications';
 
-const RootLayout = () => {
-  return (
-    <View style={{ flex: 1 }}>
-      <Slot/>
-    </View>
-  )
+export default function RootLayout() {
+  useEffect(() => {
+    const cargarPreferenciaNotificaciones = async () => {
+      const activas = await AsyncStorage.getItem('notificaciones_activas');
+      if (activas === 'true') {
+        iniciarNotificacionesBolsas();
+      }
+    };
+
+    cargarPreferenciaNotificaciones();
+
+    return () => {
+      detenerNotificacionesBolsas();
+    };
+  }, []);
+
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
-
-export default RootLayout
