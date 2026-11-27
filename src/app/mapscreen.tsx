@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView, { Marker, Region } from 'react-native-maps';
+import MapaOSM, { Coordenada, MapaOSMRef } from '../components/MapaOSM';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../utils/supabase';
@@ -47,6 +47,9 @@ const calcularDistancia = (lat1: number, lon1: number, lat2: number, lon2: numbe
         : `${(metros / 1000).toFixed(1)} km`;
 };
 
+// Talca, usada si no se puede obtener la ubicación del usuario
+const UBICACION_POR_DEFECTO: Coordenada = { latitude: -35.4264, longitude: -71.6554 };
+
 const OPCIONES_RADIO = [
     { label: 'Todos', valor: null },
     { label: '1 km', valor: 1000 },
@@ -62,9 +65,10 @@ const textoAMetros = (texto: string): number => {
 
 const MapScreen = () => {
     const router = useRouter();
-    const mapRef = useRef<MapView | null>(null);
+    const mapRef = useRef<MapaOSMRef | null>(null);
 
-    const [location, setLocation] = useState<Region | null>(null);
+    const [location, setLocation] = useState<Coordenada | null>(null);
+    const [ubicacionUsuario, setUbicacionUsuario] = useState<Coordenada | null>(null);
     const [rescates, setRescates] = useState<RescateDisponible[]>([]);
     const [loadingBolsas, setLoadingBolsas] = useState(true);
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -82,6 +86,24 @@ const MapScreen = () => {
             return textoAMetros(item.distancia) <= radioFiltro;
         })
         .sort((a, b) => textoAMetros(a.distancia) - textoAMetros(b.distancia));
+
+    // Se memoriza para no reenviar los marcadores al mapa en cada render
+    // (por ejemplo, cada segundo mientras corre el temporizador de la reserva).
+    const marcadoresMapa = useMemo(
+        () =>
+            rescates
+                .filter((item) => item.coordenadas)
+                .filter((item) => radioFiltro === null || textoAMetros(item.distancia) <= radioFiltro)
+                .map((item) => ({
+                    id: item.id,
+                    latitude: item.coordenadas!.latitude,
+                    longitude: item.coordenadas!.longitude,
+                    titulo: item.nombreLocal,
+                    descripcion: `${item.producto} - $${item.precioRescate}`,
+                    color: selectedId === item.id ? '#00bf19' : '#E53935',
+                })),
+        [rescates, radioFiltro, selectedId]
+    );
 
     useEffect(() => {
         if (!qrModalVisible || !reservaActiva?.fechaReserva) return;
@@ -235,8 +257,26 @@ const MapScreen = () => {
 
     useEffect(() => {
         (async () => {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
+            let coords: Coordenada | null = null;
+            try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status === 'granted') {
+                    const currentLocation = await Location.getCurrentPositionAsync({});
+                    coords = {
+                        latitude: currentLocation.coords.latitude,
+                        longitude: currentLocation.coords.longitude,
+                    };
+                }
+            } catch (error) {
+                console.warn('No se pudo obtener la ubicación:', error);
+            }
+
+            // Si no hay permiso o el GPS falla, se centra el mapa en una ubicación por defecto
+            // para que la pantalla no quede cargando para siempre.
+            setLocation(coords ?? UBICACION_POR_DEFECTO);
+            setUbicacionUsuario(coords);
+
+            if (!coords) {
                 await Promise.all([
                     fetchBolsasDisponibles(),
                     fetchReservaActiva(),
@@ -244,15 +284,7 @@ const MapScreen = () => {
                 return;
             }
 
-            let currentLocation = await Location.getCurrentPositionAsync({});
-            const { latitude, longitude } = currentLocation.coords;
-
-            setLocation({
-                latitude,
-                longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-            });
+            const { latitude, longitude } = coords;
 
             await Promise.all([
                 fetchBolsasDisponibles(latitude, longitude),
@@ -266,15 +298,7 @@ const MapScreen = () => {
         setSelectedId(isAlreadySelected ? null : item.id);
 
         if (!isAlreadySelected && item.coordenadas && mapRef.current) {
-            mapRef.current.animateToRegion(
-                {
-                    latitude: item.coordenadas.latitude,
-                    longitude: item.coordenadas.longitude,
-                    latitudeDelta: 0.005,
-                    longitudeDelta: 0.005,
-                },
-                500
-            );
+            mapRef.current.volarA(item.coordenadas, 16);
         }
     };
 
@@ -393,25 +417,15 @@ const MapScreen = () => {
                 })}
             </View>
 
-            <MapView
+            <MapaOSM
                 ref={mapRef}
                 style={styles.map}
-                initialRegion={location}
-                showsUserLocation={true}
-                showsMyLocationButton={true}
-            >
-                {rescatesFiltrados.map((item) =>
-                    item.coordenadas ? (
-                        <Marker
-                            key={item.id}
-                            coordinate={item.coordenadas}
-                            title={item.nombreLocal}
-                            description={`${item.producto} - $${item.precioRescate}`}
-                            pinColor={selectedId === item.id ? '#00bf19' : 'red'}
-                        />
-                    ) : null
-                )}
-            </MapView>
+                centro={location}
+                zoom={15}
+                ubicacionUsuario={ubicacionUsuario}
+                marcadores={marcadoresMapa}
+                onMarcadorPress={(id) => setSelectedId(id)}
+            />
 
             {/* Carrusel inferior de bolsas disponibles */}
             <View style={styles.carouselContainer}>
@@ -797,4 +811,4 @@ const styles = StyleSheet.create({
     },
 });
 
-export default MapScreen;
+export default MapScreen;

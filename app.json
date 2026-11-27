@@ -1,24 +1,23 @@
 {
   "expo": {
     "name": "Rescatapp",
-    "slug": "rescatapp",
+    "slug": "rescatapp-gtvbditsgc5ldjoopz",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "rescatapp",
     "userInterfaceStyle": "automatic",
-    "ios": {
-    },
+    "ios": {},
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE"
       },
       "predictiveBackGestureEnabled": false,
-      "config": {
-        "googleMaps": {
-          "apiKey": ""
-        }
-      },
-      "package": "com.anonymous.Rescatapp"
+      "package": "com.anonymous.Rescatapp",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "output": "static"
@@ -35,7 +34,21 @@
       "@react-native-community/datetimepicker",
       "expo-image",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "RescatApp usa la cámara para escanear el código QR de retiro.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "RescatApp usa tu ubicación para mostrarte los comercios cercanos."
+        }
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -48,9 +61,9 @@
         }
       },
       "eas": {
-        "projectId": "62db5572-fa6a-4810-8a47-55989a14e3bd"
+        "projectId": "402819ec-fe25-48cc-be10-18cbd2b60623"
       }
     },
-    "owner": "darktakes-team"
+    "owner": "zehkas-team"
   }
 }
